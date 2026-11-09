@@ -47,3 +47,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Dados locais de consultas
+/consulta1_titulos.csv
+/consulta2_especies.csv

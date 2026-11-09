@@ -1,17 +1,13 @@
-import { useMemo, useState } from "react";
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  DemoState,
+  Filter,
+  TitleItem,
+  View,
+} from "./types/financial-title";
 
-type Filter = "all" | "overdue" | "upcoming";
-type View = "dashboard" | "list";
-type DemoState = "data" | "empty" | "error";
-
-type TitleItem = {
-  id: string;
-  description: string;
-  issuedAt: Date;
-  dueAt: Date;
-  nominalValue: number;
-  paidValue: number;
-};
+type FontScale = "normal" | "large" | "largest";
 
 const currency = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -181,31 +177,157 @@ function Brand({ light = false }: { light?: boolean }) {
   );
 }
 
-function Login({ onLogin }: { onLogin: () => void }) {
+function AccessibilityControls({
+  fontScale,
+  onFontScaleChange,
+  highContrast,
+  onHighContrastChange,
+  darkTheme,
+  onDarkThemeChange,
+}: {
+  fontScale: FontScale;
+  onFontScaleChange: (scale: FontScale) => void;
+  highContrast: boolean;
+  onHighContrastChange: (enabled: boolean) => void;
+  darkTheme: boolean;
+  onDarkThemeChange: (enabled: boolean) => void;
+}) {
+  const scales: FontScale[] = ["normal", "large", "largest"];
+  const scaleLabels: Record<FontScale, string> = {
+    normal: "padrão",
+    large: "grande",
+    largest: "maior",
+  };
+  const scaleIndex = scales.indexOf(fontScale);
+
+  return (
+    <section
+      aria-label="Opções de acessibilidade"
+      className="flex flex-wrap items-center justify-end gap-2"
+    >
+      <span aria-live="polite" className="mr-1 text-sm font-medium">
+        Texto {scaleLabels[fontScale]}
+      </span>
+      <button
+        aria-label="Diminuir tamanho do texto"
+        className="accessibility-button"
+        disabled={scaleIndex === 0}
+        onClick={() => onFontScaleChange(scales[scaleIndex - 1])}
+        type="button"
+      >
+        A−
+      </button>
+      <button
+        aria-label="Aumentar tamanho do texto"
+        className="accessibility-button"
+        disabled={scaleIndex === scales.length - 1}
+        onClick={() => onFontScaleChange(scales[scaleIndex + 1])}
+        type="button"
+      >
+        A+
+      </button>
+      <button
+        aria-pressed={highContrast}
+        className="accessibility-button"
+        onClick={() => onHighContrastChange(!highContrast)}
+        type="button"
+      >
+        {highContrast ? "Contraste padrão" : "Alto contraste"}
+      </button>
+      <button
+        aria-pressed={darkTheme}
+        className="accessibility-button"
+        onClick={() => onDarkThemeChange(!darkTheme)}
+        type="button"
+      >
+        {darkTheme ? "Tema claro" : "Tema escuro"}
+      </button>
+    </section>
+  );
+}
+
+  function Login({
+    onLogin,
+    headingRef,
+    accessibilityControls,
+  }: {
+    onLogin: (nomeFornecedor: string) => void;
+    headingRef: React.RefObject<HTMLHeadingElement | null>;
+    accessibilityControls: React.ReactNode;
+  }) {
   const [supplier, setSupplier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState(false);
 
-  function submit(event: React.FormEvent) {
-    event.preventDefault();
-    if (!supplier.trim() || !password.trim()) {
+const [error, setError] = useState(false);
+const [isSubmitting, setIsSubmitting] = useState(false);
+
+
+async function submit(event: React.FormEvent) {
+  event.preventDefault();
+
+  if (!supplier.trim() || !password.trim()) {
+    setError(true);
+    return;
+  }
+
+  setError(false);
+  setIsSubmitting(true);
+
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        codigo: supplier.trim(),
+        senha: password,
+      }),
+    });
+
+    if (!response.ok) {
       setError(true);
       return;
     }
-    onLogin();
+
+    const data = await response.json();
+    const nomeFornecedor = data?.fornecedor?.nome;
+
+    if (
+      typeof nomeFornecedor !== "string" ||
+      !nomeFornecedor.trim()
+    ) {
+      setError(true);
+      return;
+    }
+
+    onLogin(nomeFornecedor);
+  } catch {
+    setError(true);
+  } finally {
+    setIsSubmitting(false);
   }
+}
 
   return (
-    <main className="min-h-screen bg-[#F5F7FA] px-4 py-8 sm:grid sm:place-items-center sm:px-6">
+    <>
+      <a className="skip-link" href="#main-content">
+        Pular para o conteúdo principal
+      </a>
+      <main
+        className="min-h-screen bg-[#F5F7FA] px-4 py-8 sm:grid sm:place-items-center sm:px-6"
+        id="main-content"
+        tabIndex={-1}
+      >
       <div className="mx-auto grid w-full max-w-[1040px] overflow-hidden rounded-[24px] bg-white shadow-[0_24px_70px_rgba(15,45,75,0.12)] md:min-h-[650px] md:grid-cols-[0.9fr_1.1fr]">
         <section className="relative hidden overflow-hidden bg-[#16324F] p-12 md:flex md:flex-col md:justify-between">
           <Brand light />
           <div className="relative z-10 max-w-sm">
             <div className="mb-6 h-1 w-12 rounded-full bg-[#2563EB]" />
-            <h1 className="text-[2.55rem] leading-[1.15] font-semibold tracking-[-0.03em] text-white">
+            <h2 className="text-[2.55rem] leading-[1.15] font-semibold tracking-[-0.03em] text-white">
               Sua situação financeira, de forma simples.
-            </h1>
+            </h2>
             <p className="mt-5 text-base leading-7 text-blue-100">
               Consulte títulos em aberto e acompanhe seus vencimentos com segurança.
             </p>
@@ -220,15 +342,21 @@ function Login({ onLogin }: { onLogin: () => void }) {
             <div className="mb-10 md:hidden">
               <Brand />
             </div>
+            <div className="mb-6">{accessibilityControls}</div>
             <p className="mb-2 text-sm font-semibold text-[#2563EB]">Bem-vindo</p>
-            <h2 className="text-3xl font-semibold tracking-[-0.025em] text-[#1F2937]">
+            <h1
+              className="text-3xl font-semibold tracking-[-0.025em] text-[#1F2937]"
+              id="login-heading"
+              ref={headingRef}
+              tabIndex={-1}
+            >
               Acesse sua área financeira
-            </h2>
-            <p className="mt-3 text-[15px] leading-6 text-[#526071]">
+            </h1>
+            <p className="mt-3 text-[0.9375rem] leading-6 text-[#526071]">
               Informe seus dados para continuar.
             </p>
 
-            <form className="mt-9 space-y-5" onSubmit={submit} noValidate>
+            <form className="mt-9 space-y-5" onSubmit={submit}>
               <div>
                 <label
                   className="mb-2 block text-sm font-semibold text-[#1F2937]"
@@ -238,8 +366,10 @@ function Login({ onLogin }: { onLogin: () => void }) {
                 </label>
                 <input
                   autoComplete="username"
+                  aria-describedby={error ? "login-error" : undefined}
                   className="field"
                   id="supplier"
+                  required
                   onChange={(event) => {
                     setSupplier(event.target.value);
                     setError(false);
@@ -258,8 +388,10 @@ function Login({ onLogin }: { onLogin: () => void }) {
                 <div className="relative">
                   <input
                     autoComplete="current-password"
+                    aria-describedby={error ? "login-error" : undefined}
                     className="field pr-12"
                     id="password"
+                    required
                     onChange={(event) => {
                       setPassword(event.target.value);
                       setError(false);
@@ -281,8 +413,8 @@ function Login({ onLogin }: { onLogin: () => void }) {
 
               {error && (
                 <div
-                  aria-live="polite"
                   className="flex gap-3 rounded-xl border border-red-200 bg-[#FEE2E2] p-4 text-sm text-[#991B1B]"
+                  id="login-error"
                   role="alert"
                 >
                   <Icon className="mt-0.5 h-5 w-5 shrink-0" name="alert" />
@@ -290,21 +422,34 @@ function Login({ onLogin }: { onLogin: () => void }) {
                 </div>
               )}
 
-              <button className="primary-button w-full" type="submit">
-                Entrar
+              <button
+                className="primary-button w-full"
+                aria-busy={isSubmitting}
+                disabled={isSubmitting}
+                type="submit"
+              >
+                <span aria-live="polite">
+                  {isSubmitting ? "Validando acesso..." : "Entrar"}
+                </span>
               </button>
             </form>
             <div className="mt-7 rounded-xl bg-[#F5F7FA] px-4 py-3 text-center text-xs leading-5 text-[#526071]">
-              Protótipo visual: use qualquer identificação e senha para acessar os dados de exemplo.
             </div>
           </div>
         </section>
       </div>
-    </main>
+      </main>
+    </>
   );
 }
 
-function Header({ onLogout }: { onLogout: () => void }) {
+function Header({
+  onLogout,
+  supplierName,
+}: {
+  onLogout: () => void;
+  supplierName: string;
+}) {
   return (
     <header className="border-b border-[#16324F] bg-[#16324F]">
       <div className="mx-auto flex h-[76px] max-w-[1200px] items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -312,10 +457,24 @@ function Header({ onLogout }: { onLogout: () => void }) {
         <div className="flex items-center gap-3 sm:gap-6">
           <div className="hidden text-right sm:block">
             <p className="text-xs text-blue-100">Fornecedor</p>
-            <p className="text-sm font-semibold text-white">Comercial Horizonte Ltda.</p>
+            <p className="text-sm font-semibold text-white">
+              {supplierName}
+            </p>
           </div>
           <div className="hidden h-8 w-px bg-white/20 sm:block" />
-          <button className="header-button px-3 sm:px-4" onClick={onLogout} type="button">
+          <button
+            className="header-button px-3 sm:px-4"
+            onClick={async () => {
+              try {
+                await fetch("/api/auth/logout", {
+                  method: "POST",
+                });
+              } finally {
+                onLogout();
+              }
+            }}
+            type="button"
+          >
             <Icon className="h-4 w-4" name="logout" />
             Sair
           </button>
@@ -390,6 +549,7 @@ function SummaryCard({
   return (
     <button
       aria-pressed={selected}
+      aria-controls="titles-region"
       className={`summary-card group ${selected ? "summary-card-selected" : ""}`}
       onClick={onClick}
       type="button"
@@ -463,7 +623,10 @@ function StateMessage({
     },
   }[type];
   return (
-    <div className="grid min-h-72 place-items-center px-5 py-12 text-center">
+    <div
+      className="grid min-h-72 place-items-center px-5 py-12 text-center"
+      role={type === "error" ? "alert" : undefined}
+    >
       <div className="max-w-md">
         <div
           className={`mx-auto grid h-12 w-12 place-items-center rounded-full ${type === "error" ? "bg-[#FEE2E2] text-[#991B1B]" : "bg-blue-50 text-[#2563EB]"}`}
@@ -527,7 +690,6 @@ function TitlesList({
           <h2 className="text-lg font-semibold text-[#1F2937]" id="titles-heading">
             Meus títulos em aberto
           </h2>
-          <p className="mt-1 text-xs text-[#526071]">Valores e datas apresentados como exemplo.</p>
         </div>
         <FilterButtons onChange={updateFilter} value={filter} />
       </div>
@@ -542,14 +704,15 @@ function TitlesList({
         <>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full border-collapse text-left">
+              <caption className="sr-only">Títulos financeiros em aberto</caption>
               <thead>
                 <tr className="bg-[#F5F7FA] text-xs font-semibold tracking-[0.02em] text-[#526071]">
-                  <th className="px-6 py-3.5">Número do título</th>
-                  <th className="px-4 py-3.5">Descrição</th>
-                  <th className="px-4 py-3.5">Emissão</th>
-                  <th className="px-4 py-3.5">Vencimento</th>
-                  <th className="px-4 py-3.5 text-right">Valor em aberto</th>
-                  <th className="px-6 py-3.5">Situação</th>
+                  <th className="px-6 py-3.5" scope="col">Número do título</th>
+                  <th className="px-4 py-3.5" scope="col">Descrição</th>
+                  <th className="px-4 py-3.5" scope="col">Emissão</th>
+                  <th className="px-4 py-3.5" scope="col">Vencimento</th>
+                  <th className="px-4 py-3.5 text-right" scope="col">Valor em aberto</th>
+                  <th className="px-6 py-3.5" scope="col">Situação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -558,9 +721,9 @@ function TitlesList({
                     className={`${getStatus(item) === "overdue" ? "bg-[#FEE2E2]/30" : ""} transition-colors hover:bg-[#F5F7FA]`}
                     key={item.id}
                   >
-                    <td className="px-6 py-4 text-sm font-semibold whitespace-nowrap text-[#2563EB]">
+                    <th className="px-6 py-4 text-left text-sm font-semibold whitespace-nowrap text-[#2563EB]" scope="row">
                       {item.id}
-                    </td>
+                    </th>
                     <td className="px-4 py-4 text-sm text-[#1F2937]">{item.description}</td>
                     <td className="px-4 py-4 text-sm whitespace-nowrap text-[#526071]">
                       {dateFormatter.format(item.issuedAt)}
@@ -588,14 +751,14 @@ function TitlesList({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[#2563EB]">{item.id}</p>
+                    <h3 className="text-sm font-semibold text-[#2563EB]">{item.id}</h3>
                     <p className="mt-1 text-sm text-[#526071]">{item.description}</p>
                   </div>
                   <StatusBadge status={getStatus(item)} />
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-slate-100 pt-4">
                   <div>
-                    <p className="text-[11px] font-medium tracking-wide text-[#526071] uppercase">
+                    <p className="text-[0.6875rem] font-medium tracking-wide text-[#526071] uppercase">
                       Emissão
                     </p>
                     <p className="mt-1 text-sm text-[#1F2937]">
@@ -603,7 +766,7 @@ function TitlesList({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] font-medium tracking-wide text-[#526071] uppercase">
+                    <p className="text-[0.6875rem] font-medium tracking-wide text-[#526071] uppercase">
                       Vencimento
                     </p>
                     <p className="mt-1 text-sm font-semibold text-[#1F2937]">
@@ -611,7 +774,7 @@ function TitlesList({
                     </p>
                   </div>
                   <div className="col-span-2">
-                    <p className="text-[11px] font-medium tracking-wide text-[#526071] uppercase">
+                    <p className="text-[0.6875rem] font-medium tracking-wide text-[#526071] uppercase">
                       Valor em aberto
                     </p>
                     <p className="mt-1 text-lg font-semibold text-[#1F2937]">
@@ -624,7 +787,12 @@ function TitlesList({
           </div>
 
           <div className="flex flex-col gap-4 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-[#526071]">
+            <p
+              aria-live="polite"
+              aria-atomic="true"
+              className="text-xs text-[#526071]"
+              role="status"
+            >
               Exibindo {(safePage - 1) * pageSize + 1}–
               {Math.min(safePage * pageSize, filtered.length)} de {filtered.length} títulos
             </p>
@@ -667,186 +835,290 @@ function TitlesList({
   );
 }
 
-function Portal({ onLogout }: { onLogout: () => void }) {
+
+
+function Portal({
+  onLogout,
+  supplierName,
+  headingRef,
+  accessibilityControls,
+}: {
+  onLogout: () => void;
+  supplierName: string;
+  headingRef: React.RefObject<HTMLHeadingElement | null>;
+  accessibilityControls: React.ReactNode;
+}) {
   const [view, setView] = useState<View>("dashboard");
   const [filter, setFilter] = useState<Filter>("all");
   const [demoState, setDemoState] = useState<DemoState>("data");
+  const [items, setItems] = useState<TitleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadTitles() {
+      setLoading(true);
+
+      try {
+        const response = await fetch("/api/portal/titulos");
+
+        if (!response.ok) {
+          throw new Error("Falha ao consultar os títulos.");
+        }
+
+        const data = await response.json();
+
+        const titles: TitleItem[] = data.titulos.map(
+          (titulo: {
+            numero: number;
+            especie: string;
+            data_emissao: string;
+            data_vencimento: string;
+            valor_nominal: number;
+            valor_pago: number;
+          }) => ({
+            id: String(titulo.numero),
+            description: titulo.especie,
+            issuedAt: new Date(titulo.data_emissao),
+            dueAt: new Date(titulo.data_vencimento),
+            nominalValue: Number(titulo.valor_nominal),
+            paidValue: Number(titulo.valor_pago),
+          }),
+        );
+
+        if (active) {
+          setItems(titles);
+          setDemoState(titles.length ? "data" : "empty");
+        }
+      } catch {
+        if (active) {
+          setDemoState("error");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadTitles();
+
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
 
   const totals = useMemo(() => {
-    const overdue = titleItems.filter((item) => getStatus(item) === "overdue");
-    const upcoming = titleItems.filter((item) => getStatus(item) !== "overdue");
-    const sum = (items: TitleItem[]) => items.reduce((total, item) => total + openValue(item), 0);
+    const overdue = items.filter(
+      (item) => getStatus(item) === "overdue",
+    );
+
+    const upcoming = items.filter(
+      (item) => getStatus(item) !== "overdue",
+    );
+
+    const sum = (list: TitleItem[]) =>
+      list.reduce((total, item) => total + openValue(item), 0);
+
     return {
-      all: { value: sum(titleItems), count: titleItems.length },
+      all: { value: sum(items), count: items.length },
       overdue: { value: sum(overdue), count: overdue.length },
       upcoming: { value: sum(upcoming), count: upcoming.length },
     };
-  }, []);
-  const displayedTotals =
-    demoState === "empty"
-      ? {
-          all: { value: 0, count: 0 },
-          overdue: { value: 0, count: 0 },
-          upcoming: { value: 0, count: 0 },
-        }
-      : totals;
+  }, [items]);
 
-  function openDetails(nextFilter: Filter) {
+  const displayedTotals = totals;
+
+  function selectFilter(nextFilter: Filter) {
     setFilter(nextFilter);
     setView("list");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    requestAnimationFrame(() => headingRef.current?.focus());
+  }
+
+  function showDashboard() {
+    setView("dashboard");
+    requestAnimationFrame(() => headingRef.current?.focus());
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] text-[#1F2937]">
-      <Header onLogout={onLogout} />
-      <main className="mx-auto max-w-[1200px] px-4 py-7 sm:px-6 sm:py-10 lg:px-8">
-        <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+    <div className="min-h-screen bg-[#F5F7FA]">
+      <a className="skip-link" href="#main-content">
+        Pular para o conteúdo principal
+      </a>
+      <Header
+        onLogout={onLogout}
+        supplierName={supplierName}
+      />
+
+      <main
+        className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 lg:px-8"
+        id="main-content"
+        tabIndex={-1}
+      >
+        <div className="mb-6">{accessibilityControls}</div>
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            {view === "list" && (
-              <button
-                className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#2563EB] hover:text-[#16324F]"
-                onClick={() => setView("dashboard")}
-                type="button"
-              >
-                <Icon className="h-4 w-4" name="arrowLeft" />
-                Voltar ao painel financeiro
-              </button>
-            )}
             <p className="text-sm font-semibold text-[#2563EB]">
-              {view === "dashboard" ? "Olá, Comercial Horizonte" : "Consulta detalhada"}
+              Área do fornecedor
             </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-[-0.025em] text-[#1F2937] sm:text-3xl">
+            <h1
+              className="mt-2 text-2xl font-semibold tracking-tight text-[#1F2937] sm:text-3xl"
+              ref={headingRef}
+              tabIndex={-1}
+            >
               {view === "dashboard"
-                ? "Confira seus títulos"
-                : filter === "overdue"
-                  ? "Títulos vencidos"
-                  : filter === "upcoming"
-                    ? "Títulos a vencer"
-                    : "Todos os títulos"}
+                ? "Sua situação financeira"
+                : "Consulta de títulos"}
             </h1>
-            <p className="mt-2 text-sm leading-6 text-[#526071] sm:text-base">
-              {view === "dashboard"
-                ? "Acompanhe seus vencimentos e valores em aberto."
-                : "Consulte os detalhes e use os filtros para encontrar o que precisa."}
+            <p className="mt-2 text-sm leading-6 text-[#526071]">
+              Consulte seus títulos em aberto, vencimentos e valores pendentes.
             </p>
           </div>
-          <div className="flex items-center gap-2 self-start rounded-full border border-green-200 bg-[#DCFCE7] px-3 py-2 text-xs font-medium text-[#166534] sm:self-auto">
-            <span className="h-2 w-2 rounded-full bg-[#166534]" />
-            Dados fictícios para demonstração
-          </div>
+
+          {view === "list" && (
+            <button
+              className="secondary-button"
+              onClick={showDashboard}
+              type="button"
+            >
+              <Icon name="arrowLeft" className="h-4 w-4" />
+              Voltar ao resumo
+            </button>
+          )}
         </div>
 
         {view === "dashboard" && (
-          <section aria-label="Resumo financeiro" className="mb-8 grid gap-4 md:grid-cols-3">
-            <SummaryCard
-              count={displayedTotals.all.count}
-              onClick={() => openDetails("all")}
-              selected={false}
-              title="Total em aberto"
-              type="all"
-              value={displayedTotals.all.value}
-            />
-            <SummaryCard
-              count={displayedTotals.overdue.count}
-              onClick={() => openDetails("overdue")}
-              selected={false}
-              title="Títulos vencidos"
-              type="overdue"
-              value={displayedTotals.overdue.value}
-            />
-            <SummaryCard
-              count={displayedTotals.upcoming.count}
-              onClick={() => openDetails("upcoming")}
-              selected={false}
-              title="Títulos a vencer"
-              type="upcoming"
-              value={displayedTotals.upcoming.value}
-            />
+          <section aria-label="Resumo financeiro" className="mb-8">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-[#1F2937]">
+                Resumo financeiro
+              </h2>
+              {loading && (
+                <span className="text-xs text-[#526071]">
+                  Atualizando dados...
+                </span>
+              )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <SummaryCard
+                type="all"
+                title="Total em aberto"
+                value={displayedTotals.all.value}
+                count={displayedTotals.all.count}
+                selected={filter === "all"}
+                onClick={() => selectFilter("all")}
+              />
+
+              <SummaryCard
+                type="overdue"
+                title="Títulos vencidos"
+                value={displayedTotals.overdue.value}
+                count={displayedTotals.overdue.count}
+                selected={filter === "overdue"}
+                onClick={() => selectFilter("overdue")}
+              />
+
+              <SummaryCard
+                type="upcoming"
+                title="Títulos a vencer"
+                value={displayedTotals.upcoming.value}
+                count={displayedTotals.upcoming.count}
+                selected={filter === "upcoming"}
+                onClick={() => selectFilter("upcoming")}
+              />
+            </div>
           </section>
         )}
 
-        {view === "list" && (
-          <div className="mb-6 flex items-center gap-3 overflow-x-auto pb-1">
-            {(["all", "overdue", "upcoming"] as Filter[]).map((type) => (
-              <button
-                aria-pressed={filter === type}
-                className={`min-w-[190px] rounded-xl border bg-white px-4 py-3 text-left transition-all ${
-                  filter === type
-                    ? "border-[#2563EB] shadow-[0_0_0_2px_rgba(37,99,235,0.1)]"
-                    : "border-slate-200 hover:border-slate-300"
-                }`}
-                key={type}
-                onClick={() => setFilter(type)}
-                type="button"
-              >
-                <span className="block text-xs font-medium text-[#526071]">
-                  {type === "all"
-                    ? "Total em aberto"
-                    : type === "overdue"
-                      ? "Títulos vencidos"
-                      : "Títulos a vencer"}
-                </span>
-                <span className="mt-1 block text-base font-semibold text-[#1F2937]">
-                  {currency.format(displayedTotals[type].value)}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        <section
+          aria-label="Títulos financeiros"
+          className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+          id="titles-region"
+        >
+          {loading ? (
+            <div
+              className="grid min-h-72 place-items-center px-5 py-12 text-center"
+              aria-live="polite"
+              aria-atomic="true"
+              role="status"
+            >
+              <p className="text-sm text-[#526071]">
+                Carregando seus títulos financeiros...
+              </p>
+            </div>
+          ) : (
+            <TitlesList
+              demoState={demoState}
+              filter={filter}
+              items={items}
+              onFilter={setFilter}
+              onRetry={() => setReloadKey((current) => current + 1)}
+            />
+          )}
+        </section>
 
-        <TitlesList
-          demoState={demoState}
-          filter={filter}
-          items={titleItems}
-          onFilter={setFilter}
-          onRetry={() => setDemoState("data")}
-        />
-
-        <aside className="mt-6 flex flex-col gap-3 rounded-xl border border-dashed border-slate-300 bg-white/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold text-[#1F2937]">Estados do protótipo</p>
-            <p className="mt-0.5 text-xs text-[#526071]">
-              Use os controles para visualizar as variações previstas.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["data", "Com títulos"],
-                ["empty", "Sem títulos"],
-                ["error", "Falha ao carregar"],
-              ] as [DemoState, string][]
-            ).map(([value, label]) => (
-              <button
-                aria-pressed={demoState === value}
-                className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                  demoState === value
-                    ? "bg-[#16324F] text-white"
-                    : "bg-white text-[#526071] hover:bg-[#F5F7FA]"
-                }`}
-                key={value}
-                onClick={() => setDemoState(value)}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </aside>
+        <p className="mt-5 text-center text-xs leading-5 text-[#526071]">
+          As informações financeiras são consultadas conforme os dados
+          disponibilizados pelo Grupo Queiroz.
+        </p>
       </main>
-      <footer className="mt-6 border-t border-slate-200 bg-white py-6 text-center text-xs text-[#526071]">
-        Portal de Fornecedores · Grupo Queiroz
-      </footer>
     </div>
   );
 }
 
+
 export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [supplierName, setSupplierName] = useState("");
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const [fontScale, setFontScale] = useState<FontScale>("normal");
+  const [highContrast, setHighContrast] = useState(false);
+  const [darkTheme, setDarkTheme] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.fontScale = fontScale;
+    document.documentElement.dataset.contrast = highContrast ? "high" : "standard";
+    document.documentElement.dataset.theme = darkTheme ? "dark" : "light";
+  }, [fontScale, highContrast, darkTheme]);
+
+  const accessibilityControls = (
+    <AccessibilityControls
+      fontScale={fontScale}
+      onFontScaleChange={setFontScale}
+      highContrast={highContrast}
+      onHighContrastChange={setHighContrast}
+      darkTheme={darkTheme}
+      onDarkThemeChange={setDarkTheme}
+    />
+  );
+
+  function logout() {
+    setAuthenticated(false);
+    setSupplierName("");
+    requestAnimationFrame(() => headingRef.current?.focus());
+  }
+
+  function login(nomeFornecedor: string) {
+    setSupplierName(nomeFornecedor);
+    setAuthenticated(true);
+    requestAnimationFrame(() => headingRef.current?.focus());
+  }
+
   return authenticated ? (
-    <Portal onLogout={() => setAuthenticated(false)} />
+    <Portal
+      accessibilityControls={accessibilityControls}
+      headingRef={headingRef}
+      onLogout={logout}
+      supplierName={supplierName}
+    />
   ) : (
-    <Login onLogin={() => setAuthenticated(true)} />
+    <Login
+      accessibilityControls={accessibilityControls}
+      headingRef={headingRef}
+      onLogin={login}
+    />
   );
 }
